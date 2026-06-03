@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VALORY — Admin</title>
+<style>
+  body{margin:0;background:#0b0b0d;color:#f3ede1;font-family:Arial, sans-serif}main{max-width:1100px;margin:0 auto;padding:28px 16px}h1,h2{font-weight:300;color:#c9a35c}input,textarea,select,button{font:inherit}input,textarea,select{width:100%;padding:10px;background:#121215;color:#f3ede1;border:1px solid #3b3325;border-radius:8px;box-sizing:border-box}textarea{min-height:70px}button{background:#c9a35c;color:#0b0b0d;border:0;border-radius:8px;padding:10px 14px;cursor:pointer}.ghost{background:transparent;color:#c9a35c;border:1px solid #c9a35c}.danger{background:#8d3434;color:white}.card{border:1px solid #2a241a;background:#121215;border-radius:14px;padding:16px;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.muted{color:#b9b2a4;font-size:13px}.order{border-left:3px solid #c9a35c}.product-title{font-size:20px;color:#fff}.top{display:flex;justify-content:space-between;gap:12px;align-items:center}@media(max-width:700px){.grid,.grid3{grid-template-columns:1fr}.top{display:block}}
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><div><h1>VALORY — Espace admin</h1><p class="muted">Voir les commandes, ajouter des montres, changer les prix et les stocks.</p></div><a href="/" style="color:#c9a35c">Voir la boutique</a></div>
+  <section id="login" class="card">
+    <h2>Connexion</h2>
+    <p class="muted">Mot de passe par défaut : <b>valory123</b>. Change-le sur le serveur avec ADMIN_PASSWORD.</p>
+    <div class="row"><input id="password" type="password" placeholder="Mot de passe admin" style="max-width:320px"><button onclick="login()">Entrer</button></div>
+    <p id="loginMsg" class="muted"></p>
+  </section>
+  <section id="app" style="display:none">
+    <h2>Commandes reçues</h2>
+    <div id="orders"></div>
+    <h2>Ajouter / modifier un article</h2>
+    <div class="card">
+      <input type="hidden" id="p_id">
+      <div class="grid3">
+        <label>Nom<input id="p_name" placeholder="Nom de la montre"></label>
+        <label>Collection<input id="p_collection" placeholder="Héritage"></label>
+        <label>Prix €<input id="p_price" type="number" placeholder="2450"></label>
+        <label>Stock<input id="p_stock" type="number" placeholder="5"></label>
+        <label>Mouvement<input id="p_movement" placeholder="Automatique"></label>
+        <label>Taille boîtier<input id="p_case_size" placeholder="40 mm"></label>
+        <label>Matériau<input id="p_material" placeholder="Acier"></label>
+        <label>Image URL<input id="p_image" placeholder="https://..."></label>
+        <label>Couleur accent<input id="p_accent" placeholder="#c9a35c"></label>
+      </div>
+      <label>Description<textarea id="p_description"></textarea></label>
+      <div class="row" style="margin-top:12px"><button onclick="saveProduct()">Enregistrer l'article</button><button class="ghost" onclick="resetForm()">Nouveau</button></div>
+    </div>
+    <h2>Articles</h2>
+    <div id="products"></div>
+  </section>
+</main>
+<script>
+let PASS='', products=[];
+const euro = n => Number(n||0).toLocaleString('fr-FR') + ' €';
+function headers(){ return {'Content-Type':'application/json','x-admin-password':PASS}; }
+async function api(url, options={}){
+  const r = await fetch(url,{...options,headers:{...headers(),...(options.headers||{})}});
+  const d = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(d.error||'Erreur');
+  return d;
+}
+async function login(){
+  PASS=document.getElementById('password').value;
+  try{ await loadAll(); document.getElementById('login').style.display='none'; document.getElementById('app').style.display='block'; }
+  catch(e){ document.getElementById('loginMsg').textContent=e.message; }
+}
+async function loadAll(){ products = await api('/api/admin/products'); const orders = await api('/api/admin/orders'); renderProducts(); renderOrders(orders); }
+function renderOrders(orders){
+  document.getElementById('orders').innerHTML = orders.length ? orders.map(o=>`<div class="card order"><div class="row"><b>${o.id}</b><span class="muted">${new Date(o.created_at).toLocaleString('fr-FR')}</span><select onchange="setStatus('${o.id}',this.value)" style="max-width:170px"><option ${o.status==='nouvelle'?'selected':''}>nouvelle</option><option ${o.status==='en préparation'?'selected':''}>en préparation</option><option ${o.status==='envoyée'?'selected':''}>envoyée</option><option ${o.status==='annulée'?'selected':''}>annulée</option></select></div><p><b>${o.customer_name}</b> — ${o.email} — ${o.phone||''}<br>${o.address}, ${o.zip||''} ${o.city}, ${o.country||''}</p><p>${o.items.map(i=>`${i.qty}× ${i.name} (${euro(i.price)})`).join('<br>')}</p><h3>Total : ${euro(o.total)}</h3></div>`).join('') : '<p class="muted">Aucune commande pour l’instant.</p>';
+}
+async function setStatus(id,status){ await api('/api/admin/orders/'+id+'/status',{method:'PUT',body:JSON.stringify({status})}); }
+function renderProducts(){
+  document.getElementById('products').innerHTML = products.map(p=>`<div class="card"><div class="row"><div style="flex:1"><div class="product-title">${p.name}</div><div class="muted">${p.collection} — ${euro(p.price)} — stock ${p.stock}</div></div><button onclick='editProduct(${JSON.stringify(p).replace(/'/g,"&#39;")})'>Modifier</button><button class="danger" onclick="deleteProduct(${p.id})">Supprimer</button></div></div>`).join('');
+}
+function editProduct(p){ for(const k of ['id','name','collection','price','stock','movement','case_size','material','image','accent','description']){ const el=document.getElementById('p_'+k); if(el) el.value=p[k]||''; } window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'}); }
+function resetForm(){ for(const id of ['p_id','p_name','p_collection','p_price','p_stock','p_movement','p_case_size','p_material','p_image','p_accent','p_description']) document.getElementById(id).value=''; document.getElementById('p_accent').value='#c9a35c'; }
+async function saveProduct(){
+  const p={}; for(const k of ['id','name','collection','price','stock','movement','case_size','material','image','accent','description']) p[k]=document.getElementById('p_'+k).value;
+  p.price=Number(p.price); p.stock=Number(p.stock);
+  if(p.id) await api('/api/admin/products/'+p.id,{method:'PUT',body:JSON.stringify(p)}); else await api('/api/admin/products',{method:'POST',body:JSON.stringify(p)});
+  resetForm(); await loadAll();
+}
+async function deleteProduct(id){ if(confirm('Supprimer cet article ?')){ await api('/api/admin/products/'+id,{method:'DELETE'}); await loadAll(); } }
+resetForm();
+</script>
+</body>
+</html>
