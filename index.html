@@ -475,15 +475,30 @@ async function submitOrder(){
     err.textContent = 'Merci de compléter les champs requis.'; return;
   }
   err.textContent = '';
-  try{
-    const r = await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    const d = await r.json();
-    if(!r.ok) throw new Error(d.error||'Erreur');
-    showConfirm(payload.customer_name, d.orderId, d.total);
-  }catch(e){
-    // Mode aperçu hors-ligne : on confirme quand même
-    showConfirm(payload.customer_name, 'APERÇU-'+Math.floor(Math.random()*9000+1000), cartTotal());
-  }
+  try {
+  const total = cartTotal();
+
+  const r = await fetch('/create-checkout-session', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      productName: 'Commande VALORY',
+      amount: total
+    })
+  });
+const d = await r.json();
+
+if (!r.ok) {
+  throw new Error(d.error || 'Erreur paiement');
+}
+
+window.location.href = d.url;
+
+} catch (e) {
+  err.textContent = 'Erreur paiement : ' + e.message;
+}
+
+
   cart=[]; renderCart();
 }
 
