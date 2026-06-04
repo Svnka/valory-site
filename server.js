@@ -141,5 +141,29 @@ app.put('/api/admin/orders/:id/status', requireAdmin, async (req, res) => {
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
+app.post('/create-checkout-session', async (req, res) => {
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      line_items: [{
+        price_data: {
+          currency: 'eur',
+          product_data: {
+            name: req.body.productName || 'Produit Valory',
+          },
+          unit_amount: Number(req.body.amount) * 100,
+        },
+        quantity: 1,
+      }],
+      success_url: 'https://valory-site-hnxz.onrender.com/success.html',
+      cancel_url: 'https://valory-site-hnxz.onrender.com/cancel.html',
+    });
 
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
 app.listen(PORT, () => console.log(`VALORY lancé sur http://localhost:${PORT}`));
